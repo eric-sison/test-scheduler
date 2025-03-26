@@ -53,11 +53,11 @@ export const useMeterReadingSchedule = (holidays: Holiday[], date?: Date) => {
   const formatDate = (date: Date | undefined, dateFormat?: "yyyy-MM-dd" | "MMM dd") => {
     if (!date) return undefined;
 
-    // if (!dateFormat) {
-    //   dateFormat = "yyyy-MM-dd";
-    // }
+    if (!dateFormat) {
+      dateFormat = "yyyy-MM-dd";
+    }
 
-    return format(date, dateFormat ?? "yyyy-MM-dd");
+    return format(date, dateFormat);
   };
 
   // Memoize formatted holiday dates for efficient lookups
@@ -73,6 +73,23 @@ export const useMeterReadingSchedule = (holidays: Holiday[], date?: Date) => {
   const isHoliday = useCallback(
     (date: Date): boolean => holidayDates.includes(formatDate(date) as string),
     [holidayDates]
+  );
+
+  const addBusinessDays = useCallback(
+    (date: Date, daysToAdd: number) => {
+      let daysAdded = 0;
+
+      while (daysAdded < daysToAdd) {
+        date = addDays(date, 1);
+
+        if (!isWeekend(date) && !isHoliday(date)) {
+          daysAdded++;
+        }
+      }
+
+      return date;
+    },
+    [isHoliday]
   );
 
   // Add 1 day if the provided date is a holiday
@@ -109,22 +126,6 @@ export const useMeterReadingSchedule = (holidays: Holiday[], date?: Date) => {
     return { monthStart, startOfReadingDate };
   }, [currentDate]);
 
-  const addBusinessDays = useCallback(
-    (date: Date, daysToAdd: number) => {
-      let daysAdded = 0;
-      while (daysAdded < daysToAdd) {
-        date = addDays(date, 1);
-
-        if (!isWeekend(date) && !isHoliday(date)) {
-          daysAdded++;
-        }
-      }
-
-      return date;
-    },
-    [isHoliday]
-  );
-
   const getCalendarDays = useCallback(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
     const lastDayOfMonth = endOfMonth(currentDate);
@@ -132,12 +133,12 @@ export const useMeterReadingSchedule = (holidays: Holiday[], date?: Date) => {
     const firstDayOfCalendar = startOfWeek(firstDayOfMonth);
     const lastDayOfCalendar = endOfWeek(lastDayOfMonth);
 
-    const allDays = eachDayOfInterval({
+    const calendarDays = eachDayOfInterval({
       start: firstDayOfCalendar,
       end: lastDayOfCalendar,
     });
 
-    return allDays;
+    return calendarDays;
   }, [currentDate]);
 
   const calculateDueDates = useCallback((): DueDate[] => {
@@ -172,10 +173,11 @@ export const useMeterReadingSchedule = (holidays: Holiday[], date?: Date) => {
       let disconnectionDate = dueDates[0].dueDate;
 
       const disconnectionDates = dueDates.map((date, index) => {
-        disconnectionDate =
-          index === 0
-            ? (disconnectionDate = addBusinessDays(disconnectionDate, 3))
-            : (disconnectionDate = addDays(disconnectionDate, 1));
+        if (index === 0) {
+          disconnectionDate = addBusinessDays(disconnectionDate, 3);
+        } else {
+          disconnectionDate = addDays(disconnectionDate, 1);
+        }
 
         disconnectionDate = adjustForHolidayOrWeekend(disconnectionDate);
 
